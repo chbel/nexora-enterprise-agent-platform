@@ -30,9 +30,9 @@ class ExecutorAgent:
         """Discover and return all available MCP tools."""
         tools = []
         mcp_endpoints = [
-            f"http://localhost:{settings.postgres_mcp_port}/mcp",
-            f"http://localhost:{settings.document_mcp_port}/mcp",
-            f"http://localhost:{settings.notification_mcp_port}/mcp",
+            f"http://{settings.postgres_mcp_host}:{settings.postgres_mcp_port}/mcp",
+            f"http://{settings.document_mcp_host}:{settings.document_mcp_port}/mcp",
+            f"http://{settings.notification_mcp_host}:{settings.notification_mcp_port}/mcp",
         ]
         for endpoint in mcp_endpoints:
             try:
@@ -104,7 +104,7 @@ Execute this step using the available tools.
                 # Find endpoint for this tool
                 endpoint = next(
                     (t["_endpoint"] for t in tools if t["name"] == tool_name),
-                    f"http://localhost:{settings.postgres_mcp_port}/mcp",
+                    f"http://{settings.postgres_mcp_host}:{settings.postgres_mcp_port}/mcp",
                 )
 
                 result = await self._call_mcp_tool(tool_name, tool_args, endpoint)
