@@ -41,9 +41,9 @@ Read this first. It is the honest scope of the repository, taken from reading th
 | "Checkpointed, durable state" | `main.py` and the REST route build the graph **without a checkpointer**. `create_graph_with_persistence()` exists but is not used. The graph is also compiled with `interrupt_before=["handle_error"]`. |
 | "Deployed on EKS with CI/CD and ArgoCD" | CI runs a minimal lint and `pytest`; there are **no deploy jobs**, and ArgoCD is not configured. Terraform and Kubernetes files exist (EKS, VPC, RDS, ElastiCache, S3; a 3 to 20 replica HPA) but were not applied or tested here. |
 | "LangSmith + Langfuse observability" | Tracing setup covers LangSmith and Prometheus metrics. `langfuse` is in `requirements.txt` and settings but is not used in the code. |
-| "Next.js 14 + shadcn/ui" | The frontend imports `lucide-react` and `remark-gfm`, which are **not listed** in `frontend/package.json`, and shadcn/ui is not present. By reading the files, `npm install` followed by a build would fail on those imports. |
+| "Next.js 14 + shadcn/ui" | shadcn/ui is not present. `lucide-react` and `remark-gfm` are now listed in `frontend/package.json` and the production build succeeds in Docker. |
 
-Also from reading the files, not from running them: the `celery-worker` service in `docker-compose.yml` points at `backend.core.celery_app`, which does not exist; the README's old ingest example used `-F "files=@..."` but the route expects a field named `file`; and `main.py` defines `/api/v1/agent/invoke` even though the agent router already provides it. The test suite has five tests, and they use a mocked model; they were not run for this README.
+Also from reading the files: the `celery-worker` service now has a minimal `backend.core.celery_app` (no tasks are defined yet); the README's old ingest example used `-F "files=@..."` but the route expects a field named `file`; and `main.py` defines `/api/v1/agent/invoke` even though the agent router already provides it. The test suite has five tests, and they use a mocked model; they pass inside the backend container (`docker compose exec backend pytest tests/`).
 
 ## The idea, illustrated
 
@@ -119,24 +119,43 @@ All three use the streamable HTTP transport.
 | Tools | FastMCP servers | Three servers, as above |
 | RAG | LlamaIndex, Qdrant (hybrid), OpenAI embeddings | Needs `OPENAI_API_KEY` for embeddings |
 | API | FastAPI with REST and WebSocket | No authentication |
-| Frontend | Next.js 14, Zustand, React Markdown | Imports packages missing from `package.json` |
+| Frontend | Next.js 14, Zustand, React Markdown | Builds and serves via Docker |
 | Observability | LangSmith, Prometheus, Grafana | Langfuse is listed but unused |
-| Infrastructure | Docker Compose (11 services), Kubernetes manifests, Terraform | Not applied or tested here; the Celery worker service has no module behind it |
+| Infrastructure | Docker Compose (11 services), Kubernetes manifests, Terraform | Compose stack runs locally; Kubernetes and Terraform not applied or tested |
 
 ## Quick start
 
-Everything here comes from the source and the Makefile and has **not been run**.
+Requirements: Docker Desktop (Compose v2) and Git.
 
 ```bash
-git clone https://github.com/designer-coderajay/enterprise-agentic-ai-platform.git
-cd enterprise-agentic-ai-platform
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env     # set ANTHROPIC_API_KEY, OPENAI_API_KEY, DATABASE_URL, SECRET_KEY
-make dev-full            # Docker Compose stack
+git clone https://github.com/chbel/nexora-enterprise-agent-platform.git
+cd nexora-enterprise-agent-platform
+cp .env.example .env     # set ANTHROPIC_API_KEY, OPENAI_API_KEY (for RAG) and SECRET_KEY
+docker compose up -d --build
+docker compose ps        # all 11 services should be "Up"
 ```
 
-Or run pieces yourself: start each MCP server with `python backend/mcp_servers/<name>/server.py`, then `uvicorn backend.main:app --port 8000` from the repository root.
+If a host port is already taken, change it in `.env` (`BACKEND_PORT`, `FRONTEND_PORT`, `POSTGRES_HOST_PORT`, ...).
+Inside Compose, services reach each other by service name; the `localhost` values in `.env` are only used when running Python on the host.
+
+| Service | URL (defaults) |
+|---|---|
+| Backend API / docs | http://localhost:8000/docs |
+| Health (DB check) | http://localhost:8000/api/v1/health/ready |
+| Frontend | http://localhost:3000 |
+| MCP servers | http://localhost:8001/mcp, :8002/mcp, :8003/mcp |
+| Qdrant | http://localhost:6333 |
+| Prometheus / Grafana | http://localhost:9090 / http://localhost:3001 (admin / `GRAFANA_ADMIN_PASSWORD`) |
+
+Common commands:
+
+```bash
+docker compose logs -f backend                 # follow backend logs
+docker compose exec backend pytest tests/ -v   # run the test suite in the container
+docker compose down                            # stop (add -v to also delete the DB/Qdrant volumes)
+```
+
+Running on the host instead: Python 3.12, `pip install -r requirements-dev.txt`, `docker compose up -d postgres redis qdrant`, start each MCP server with `python -m backend.mcp_servers.<name>.server`, then `uvicorn backend.main:app --port 8000` from the repository root.
 
 Example call:
 
