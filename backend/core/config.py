@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     postgres_mcp_port: int = 8001
     document_mcp_port: int = 8002
     notification_mcp_port: int = 8003
+    postgres_mcp_host: str = "localhost"
+    document_mcp_host: str = "localhost"
+    notification_mcp_host: str = "localhost"
 
     # External integrations
     github_token: str = ""

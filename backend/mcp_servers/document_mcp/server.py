@@ -134,6 +134,7 @@ async def search_document(pdf_path: str, query: str) -> str:
 
 
 if __name__ == "__main__":
+    import contextlib
     import uvicorn
     from starlette.applications import Starlette
     from starlette.routing import Mount
@@ -142,5 +143,10 @@ if __name__ == "__main__":
     session_manager = StreamableHTTPSessionManager(
         app=mcp._mcp_server, json_response=True, stateless=True
     )
-    app = Starlette(routes=[Mount("/mcp", app=session_manager.handle_request)])
+    @contextlib.asynccontextmanager
+    async def lifespan(_app):
+        async with session_manager.run():
+            yield
+
+    app = Starlette(routes=[Mount("/mcp", app=session_manager.handle_request)], lifespan=lifespan)
     uvicorn.run(app, host="0.0.0.0", port=settings.document_mcp_port)
